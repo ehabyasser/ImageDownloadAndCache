@@ -40,6 +40,10 @@ class ImageCacheManager {
 
         return loadImageFromDisk(forKey: key)
     }
+    
+    func imageFromMemory(forKey key: String) -> UIImage?{
+        return memoryCache.object(forKey: key as NSString)
+    }
 
     private func saveImageToDisk(_ image: UIImage, forKey key: String) {
         if let data = image.pngData() {
