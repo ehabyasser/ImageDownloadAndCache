@@ -2,7 +2,7 @@
 //  UIImageView+Extensions.swift
 //  Talent
 //
-//  Created by Aamal Holding Android on 18/06/2023.
+//  Created by Ihab yasser on 05/08/2023.
 //
 
 import Foundation
@@ -10,13 +10,25 @@ import UIKit
 
 extension UIImageView{
     
-    func downloadImg(imgPath:String , size:CGSize, placeholder:UIImage = UIImage()){
-        self.image = placeholder
-        download(imagePath: imgPath, size: size)
+    private static var taskKey: UInt8 = 0
+    
+    private var currentTask: URLSessionDataTask? {
+        get {
+            return objc_getAssociatedObject(self, &UIImageView.taskKey) as? URLSessionDataTask
+        }
+        set {
+            objc_setAssociatedObject(self, &UIImageView.taskKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        }
     }
     
-    func download(imagePath:String , size:CGSize) {
-        self.subviews.forEach{ $0.removeFromSuperview() }
+    func downloadImg(imgPath:String , size:CGSize, placeholder:UIImage? = UIImage(named: "logo")){
+        
+        download(imagePath: imgPath, size: size , placeholder: placeholder)
+    }
+    
+    func download(imagePath:String , size:CGSize, placeholder:UIImage? = UIImage(named: "logo")) {
+        currentTask?.cancel()
+        self.image = placeholder
         let loading = UIActivityIndicatorView(style: .medium)
         loading.translatesAutoresizingMaskIntoConstraints = false
         loading.hidesWhenStopped = true
@@ -30,22 +42,32 @@ extension UIImageView{
             return
         }
         guard let url = URL(string: imagePath) else {return}
-        DispatchQueue.global().async {
-            guard let data = try? Data(contentsOf: url) else {
-                DispatchQueue.main.async {
-                    loading.stopAnimating()
-                }
-                return
-            }
-            DispatchQueue.main.async {
-                loading.stopAnimating()
-                guard let img = UIImage(data: data)?.scaleImage(toSize: size) else {return}
-                DispatchQueue.global().async {
+        let task = URLSession.shared.dataTask(with: url) { [weak self] data, _, error in
+            guard let data = data, let img = UIImage(data: data)?.scaleImage(toSize: size), let self = self else { return }
+            if self.image == placeholder {
+                let cacheImgBlock = BlockOperation()
+                cacheImgBlock.addExecutionBlock {
                     ImageCacheManager.shared.setImage(img, forKey: imagePath)
                 }
-                self.image = img
+                let loadCachedImgBlock = BlockOperation()
+                loadCachedImgBlock.addExecutionBlock {
+                    DispatchQueue.main.async {
+                        loading.stopAnimating()
+                        UIView.transition(with: self,
+                                          duration: 0.75,
+                                          options: .transitionCrossDissolve,
+                                          animations: { self.image = ImageCacheManager.shared.imageFromMemory(forKey: imagePath) },
+                                          completion: nil)
+                    }
+                }
+                loadCachedImgBlock.addDependency(cacheImgBlock)
+                
+                let queue = OperationQueue()
+                queue.addOperations([cacheImgBlock , loadCachedImgBlock], waitUntilFinished: true)
             }
         }
+        task.resume()
+        currentTask = task
     }
     
 }
