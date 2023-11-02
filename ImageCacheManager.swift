@@ -67,5 +67,18 @@ class ImageCacheManager {
         let fileName = key.replacingOccurrences(of: "/", with: "_")
         return cachePath.appendingPathComponent(fileName)
     }
+    
+    func clearCache() {
+        memoryCache.removeAllObjects()
+        do {
+            let documentsDirectory = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
+            let fileURLs = try FileManager.default.contentsOfDirectory(at: documentsDirectory, includingPropertiesForKeys: nil, options: [])
+            for fileURL in fileURLs {
+                try FileManager.default.removeItem(at: fileURL)
+            }
+        } catch {
+            print("Error clearing documents directory: \(error)")
+        }
+    }
 }
 
