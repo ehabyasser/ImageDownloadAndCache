@@ -21,50 +21,35 @@ extension UIImageView{
         }
     }
     
-    func downloadImg(imgPath:String , size:CGSize, placeholder:UIImage? = UIImage(named: "logo")){
-        
-        download(imagePath: imgPath, size: size , placeholder: placeholder)
-    }
-    
+
     func download(imagePath:String , size:CGSize, placeholder:UIImage? = UIImage(named: "logo")) {
         currentTask?.cancel()
         self.image = placeholder
-        let loading = UIActivityIndicatorView(style: .medium)
-        loading.translatesAutoresizingMaskIntoConstraints = false
-        loading.hidesWhenStopped = true
-        addSubview(loading)
-        loading.centerYAnchor.constraint(equalTo: centerYAnchor).isActive = true
-        loading.centerXAnchor.constraint(equalTo: centerXAnchor).isActive = true
-        loading.startAnimating()
         if let image = ImageCacheManager.shared.image(forKey: imagePath) {
             self.image = image
-            loading.stopAnimating()
             return
         }
         guard let url = URL(string: imagePath) else {return}
         let task = URLSession.shared.dataTask(with: url) { [weak self] data, _, error in
             guard let data = data, let img = UIImage(data: data)?.scaleImage(toSize: size), let self = self else { return }
-            if self.image == placeholder {
-                let cacheImgBlock = BlockOperation()
-                cacheImgBlock.addExecutionBlock {
-                    ImageCacheManager.shared.setImage(img, forKey: imagePath)
-                }
-                let loadCachedImgBlock = BlockOperation()
-                loadCachedImgBlock.addExecutionBlock {
-                    DispatchQueue.main.async {
-                        loading.stopAnimating()
-                        UIView.transition(with: self,
-                                          duration: 0.75,
-                                          options: .transitionCrossDissolve,
-                                          animations: { self.image = ImageCacheManager.shared.imageFromMemory(forKey: imagePath) },
-                                          completion: nil)
-                    }
-                }
-                loadCachedImgBlock.addDependency(cacheImgBlock)
-                
-                let queue = OperationQueue()
-                queue.addOperations([cacheImgBlock , loadCachedImgBlock], waitUntilFinished: true)
+            let cacheImgBlock = BlockOperation()
+            cacheImgBlock.addExecutionBlock {
+                ImageCacheManager.shared.setImage(img, forKey: imagePath)
             }
+            let loadCachedImgBlock = BlockOperation()
+            loadCachedImgBlock.addExecutionBlock {
+                DispatchQueue.main.async {
+                    UIView.transition(with: self,
+                                      duration: 0.75,
+                                      options: .transitionCrossDissolve,
+                                      animations: { self.image = ImageCacheManager.shared.imageFromMemory(forKey: imagePath) },
+                                      completion: nil)
+                }
+            }
+            loadCachedImgBlock.addDependency(cacheImgBlock)
+            
+            let queue = OperationQueue()
+            queue.addOperations([cacheImgBlock , loadCachedImgBlock], waitUntilFinished: true)
         }
         task.resume()
         currentTask = task
@@ -90,5 +75,8 @@ extension UIImage {
         return newImage
     }
 }
+
+
+
 
 
